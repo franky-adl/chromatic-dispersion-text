@@ -9,8 +9,16 @@ import { OrbitControls } from "three/examples/jsm/controls/OrbitControls"
 import { createCamera, createRenderer, runApp, updateLoadingProgressBar, getDefaultUniforms } from "./core-utils"
 
 // Other deps
+import { loadCubemap } from "./common-utils"
 import vertexShader from "./shaders/vertex.glsl"
 import fragmentShader from "./shaders/fragment.glsl"
+import bfFragmentShader from "./shaders/bf_fragment.glsl"
+import PX from "./assets/px.png"
+import NX from "./assets/nx.png"
+import PY from "./assets/py.png"
+import NY from "./assets/ny.png"
+import PZ from "./assets/pz.png"
+import NZ from "./assets/nz.png"
 
 global.THREE = THREE
 // previously this feature is .legacyMode = false, see https://www.donmccurdy.com/2020/06/17/color-management-in-threejs/
@@ -45,6 +53,8 @@ const uniforms = {
   uDirLight: { // reference point of the sun relative to origin in world space
     value: new THREE.Vector3(-1.0, 1.0, 1.0),
   },
+  backfaceNormalMap: { value: null },
+  lod: { value: 4.0 } // level of detail
 }
 
 
@@ -82,6 +92,10 @@ let app = {
     this.controls = new OrbitControls(camera, renderer.domElement)
     this.controls.enableDamping = true
 
+    let cubeMap = await loadCubemap([
+      PX, NX, PY, NY, PZ, NZ
+    ])
+
     await updateLoadingProgressBar(0.1)
 
     // for rendering just the background texture
@@ -89,11 +103,15 @@ let app = {
       window.innerWidth * window.devicePixelRatio,
       window.innerHeight * window.devicePixelRatio
     )
+    // for rendering the back face normals
+    this.bfFbo = new THREE.WebGLRenderTarget(
+      window.innerWidth * window.devicePixelRatio,
+      window.innerHeight * window.devicePixelRatio, {
+        type: THREE.FloatType // higher precision than the default UnsignedByteType:  https://github.com/mrdoob/three.js/issues/10665
+      }
+    )
+    uniforms.backfaceNormalMap.value = this.bfFbo.texture
     uniforms.uTexture.value = this.envFbo.texture
-
-    // add ambient light
-    let light = new THREE.AmbientLight(0xffffff, 50)
-    scene.add(light)
 
     const ctx = document.createElement('canvas').getContext('2d')
     ctx.canvas.width = 2048
@@ -115,19 +133,31 @@ let app = {
     const bg = new THREE.Mesh(plane, mat)
     scene.add(bg)
 
-    const geometry = new RoundedBoxGeometry( 1.5, 1.5, 1.5, 8, 0.2 )
-    const material = new THREE.ShaderMaterial({
+    let geometry = new RoundedBoxGeometry( 1.5, 1.5, 1.5, 8, 0.2 )
+    uniforms.cubemap = { value: cubeMap }
+    this.refractionMaterial = new THREE.ShaderMaterial({
       uniforms: uniforms,
       vertexShader: vertexShader,
       fragmentShader: fragmentShader,
       vertexColors: true
     })
-    this.mesh = new THREE.Mesh( geometry, material )
-    this.mesh.position.set(0, 0, 1)
+    // so as to enable usage of textureCubeLodEXT in fragment shader
+    this.refractionMaterial.extensions.shaderTextureLOD = true
+
+    this.mesh = new THREE.Mesh( geometry, this.refractionMaterial )
+    this.mesh.position.set(0, 0, 1.5)
     scene.add( this.mesh )
+    
+    // create back face material for rendering back face normals into frame buffer
+    this.backfaceMaterial = new THREE.ShaderMaterial({
+      vertexShader: vertexShader,
+      fragmentShader: bfFragmentShader,
+      side: THREE.BackSide
+    })
 
     // GUI controls
     const gui = new dat.GUI()
+    gui.add(uniforms.lod, "value", 0, 10, 0.1).name("LOD")
 
     // Stats - show fps
     this.stats1 = new Stats()
@@ -153,9 +183,16 @@ let app = {
     renderer.clear()
     renderer.render(scene, camera)
 
+    // render cube backfaces to fbo
+    this.mesh.visible = true
+    this.mesh.material = this.backfaceMaterial
+    renderer.setRenderTarget(this.bfFbo)
+    renderer.clearDepth()
+    renderer.render(scene, camera)
+
     // render env to screen
     renderer.setRenderTarget(null)
-    this.mesh.visible = true
+    this.mesh.material = this.refractionMaterial
     // rotate the mesh in different directions with a non-periodic function, reference: https://stackoverflow.com/a/60772438/17007893
     this.mesh.rotation.y = (Math.sin(2 * elapsed * 0.5) + Math.sin(Math.PI * elapsed * 0.5)) * 0.4
     this.mesh.rotation.x = (Math.sin(1.5 * elapsed * 0.5) + Math.sin(Math.PI/2 * elapsed * 0.5)) * 0.4

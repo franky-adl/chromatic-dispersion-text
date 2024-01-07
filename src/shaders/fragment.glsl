@@ -5,7 +5,10 @@ uniform float uRefractPower;
 uniform float uShininess;
 uniform float uDiffuseness;
 uniform vec2 u_resolution;
+uniform float lod;
 uniform sampler2D uTexture;
+uniform sampler2D backfaceNormalMap;
+uniform samplerCube cubemap;
 
 varying vec3 vNormal;
 varying vec3 vEyeVector;
@@ -15,13 +18,12 @@ varying vec3 vDirLight;
 const int LOOP = 16;
 
 // formula for Phong reflection, reference from: https://en.wikipedia.org/wiki/Phong_reflection_model
-float specular(vec3 light, float shininess, float diffuseness) {
-  vec3 normal = vNormal;
+float specular(vec3 light, float shininess, float diffuseness, vec3 normal) {
   vec3 lightVector = normalize(light);
   float LdotN = dot(normal, lightVector);
   vec3 reflectionVector = normalize(2.0 * LdotN * normal - lightVector);
 
-  float RdotV = clamp(dot(reflectionVector, -vEyeVector), 0.0, 1.0);
+  float RdotV = clamp(dot(reflectionVector, -normalize(vEyeVector)), 0.0, 1.0);
   float RdotV_2 = pow(RdotV, 6.0);
   float RdotV_10 = pow(RdotV, 20.0);
   float kSpecular = smoothstep(0.95, 1.0, RdotV_2);
@@ -49,9 +51,16 @@ void main() {
 
   vec2 uv = gl_FragCoord.xy / u_resolution.xy;
 
-  vec3 refractVecR = refract(vEyeVector, vNormal, iorRatioRed);
-  vec3 refractVecG = refract(vEyeVector, vNormal, iorRatioGreen);
-  vec3 refractVecB = refract(vEyeVector, vNormal, iorRatioBlue);
+  vec3 backfaceNormal = texture2D(backfaceNormalMap, uv).rgb;
+  // remap back to -1 to +1 space
+  backfaceNormal = backfaceNormal * vec3(2.0) - vec3(1.0);
+  float a = 0.33;
+  // mix front and back face normals so as to see refraction effect from back face as well
+  vec3 normal = vNormal * (1.0 - a) - backfaceNormal * a;
+  vec3 nEyeVector = normalize(vEyeVector);
+  vec3 refractVecR = refract(nEyeVector, normal, iorRatioRed);
+  vec3 refractVecG = refract(nEyeVector, normal, iorRatioGreen);
+  vec3 refractVecB = refract(nEyeVector, normal, iorRatioBlue);
   
   for ( int i = 0; i < LOOP; i ++ ) {
     float slide = float(i) / float(LOOP) * 0.05;
@@ -62,15 +71,17 @@ void main() {
   // Divide by the number of layers to normalize colors (rgb values can be worth up to the value of LOOP)
   color /= float(LOOP);
 
-  // Specular and diffuse reflection
-  float reflection = specular(vDirLight, uShininess, uDiffuseness);
-  color += reflection;
+  // cubemap reflection
+  vec3 reflection = reflect(vEyeVector, vNormal);
+  vec4 envColor = textureCubeLodEXT(cubemap, reflection, lod);
+  vec3 bfreflection = reflect(vEyeVector, backfaceNormal);
+  vec4 bfenvColor = textureCubeLodEXT(cubemap, bfreflection, lod);
 
   // Fresnel
-  float f = fresnel(vEyeVector, vNormal, 8.0);
+  float f = fresnel(nEyeVector, vNormal, 8.0);
   color.rgb += f * vec3(1.0);
 
-  gl_FragColor = vec4(color, 1.0);
+  gl_FragColor = vec4(color, 1.0) + envColor * 0.8 + bfenvColor * 0.1;
 
   // transform color from linear colorSpace to sRGBColorSpace
   gl_FragColor = linearToOutputTexel( gl_FragColor );

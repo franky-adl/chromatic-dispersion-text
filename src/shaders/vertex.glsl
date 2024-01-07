@@ -15,7 +15,7 @@ void main() {
     vec3 transformedNormal = normalMatrix * normal;
     vNormal = normalize(transformedNormal);
     // vector pointing from camera to the vertex, in view space
-    vEyeVector = normalize(mvPosition.xyz);
+    vEyeVector = mvPosition.xyz;
     // Transform directional light into view space, detailed explanation:
     // This is better illustrated in a diagram, because the directional light vector should point at the same direction on every vertex
     // We first get the point of the virtual sun for every vertex in world space by adding worldPos to uDirLight

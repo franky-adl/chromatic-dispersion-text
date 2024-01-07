@@ -40,6 +40,18 @@ export const loadHDRI = (url) => {
 }
 
 /**
+ * @param {array} urls - array of paths to the cubemap textures
+ * @returns {Promise<THREE.CubeTexture>}
+ */
+export const loadCubemap = (urls) => {
+    return new Promise((resolve) => {
+        const cubeTexture = new THREE.CubeTextureLoader().load(urls, function () {
+            resolve(cubeTexture)
+        })
+    })
+}
+
+/**
  * 
  * @param {string} url - Path to the texture, could be a locally imported image or a remote url
  * @returns {Promise<THREE.Texture>}
