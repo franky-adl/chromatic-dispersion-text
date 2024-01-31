@@ -93,12 +93,11 @@ export const runApp = (app, scene, renderer, camera, enableAnimation = false, un
 
         app.updateScene(delta, elapsed)
 
-        // commented to let the app wield control over the rendering pipeline
-        // if (composer === null) {
-        //     renderer.render(scene, camera)
-        // } else {
-        //     composer.render()
-        // }
+        if (composer === null) {
+            renderer.render(scene, camera)
+        } else {
+            composer.render()
+        }
     }
 
     app.initScene()
