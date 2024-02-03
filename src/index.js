@@ -84,26 +84,26 @@ let app = {
     scene.add(bg)
 
     let geometry = new RoundedBoxGeometry( 1.5, 1.5, 1.5, 8, 0.2 )
-    this.refractionMaterial = new THREE.MeshPhysicalMaterial({
+    let refractionMaterial = new THREE.MeshPhysicalMaterial({
       thickness: params.thickness,
       roughness: 0.15,
       transmission: 1,
       envMap: envMap,
       side: THREE.DoubleSide
     })
-    this.refractionMaterial.onBeforeCompile = function( shader ) {
+    refractionMaterial.onBeforeCompile = function( shader ) {
       shader.fragmentShader = shader.fragmentShader.replace('#include <transmission_pars_fragment>', TransmissionShader)
     }
 
-    this.mesh = new THREE.Mesh( geometry, this.refractionMaterial )
+    this.mesh = new THREE.Mesh( geometry, refractionMaterial )
     this.mesh.position.set(0, 0, 1.5)
     scene.add( this.mesh )
     
     // GUI controls
     const gui = new dat.GUI()
     gui.add(params, "thickness", 0, 10, 0.1).onChange((val) => {
-      this.refractionMaterial.thickness = val
-      this.refractionMaterial.needsUpdate = true
+      refractionMaterial.thickness = val
+      refractionMaterial.needsUpdate = true
     })
 
     // Stats - show fps
