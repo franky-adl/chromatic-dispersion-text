@@ -83,7 +83,7 @@ let app = {
     const bg = new THREE.Mesh(plane, mat)
     scene.add(bg)
 
-    let geometry = new RoundedBoxGeometry( 1.5, 1.5, 1.5, 8, 0.2 )
+    let geometry = new RoundedBoxGeometry( 1.5, 1.5, 1.5, 8, 0.07 )
     let refractionMaterial = new THREE.MeshPhysicalMaterial({
       thickness: params.thickness,
       roughness: 0.15,
